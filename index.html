@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>суба братик мой</title>
+    <title>Video Feed Mini App</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -124,7 +124,6 @@
             100% { transform: rotate(360deg); }
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-gray-100">
 
@@ -133,19 +132,6 @@
         <div id="splash-screen" class="absolute inset-0 bg-tma-bg z-50 flex flex-col items-center justify-center transition-opacity duration-500">
             <div class="spinner border-4 border-gray-200 border-solid rounded-full h-12 w-12 mb-4"></div>
             <p class="text-gray-600 font-medium">Загрузка данных...</p>
-        </div>
-
-        <div id="registration-view" class="absolute inset-0 bg-tma-bg z-40 flex flex-col items-center justify-center p-6 hidden">
-            <div class="max-w-xs w-full bg-tma-card rounded-xl shadow-xl p-6 text-center">
-                <h2 class="text-2xl font-bold mb-3">Добро пожаловать!</h2>
-                <p class="text-gray-600 mb-6">Пожалуйста, выберите ваш юзернейм для комментариев и профиля.</p>
-                <form onsubmit="event.preventDefault(); registerUsername()">
-                    <input type="text" id="username-input" class="w-full p-3 border border-gray-300 rounded-lg text-lg text-center focus:outline-none focus:ring-2 focus:ring-tma-primary transition duration-150" placeholder="Ваш юзернейм" required minlength="3">
-                    <button type="submit" class="w-full mt-5 py-3 px-4 rounded-full text-white font-medium bg-tma-primary hover:bg-tma-primary/90 transition duration-150">
-                        Продолжить
-                    </button>
-                </form>
-            </div>
         </div>
 
         <div id="main-app-container" class="hidden h-full w-full">
@@ -216,7 +202,7 @@
 
                 <div id="profile-view" class="main-view bg-tma-bg p-4">
                     <div class="max-w-sm mx-auto bg-tma-card rounded-xl shadow-lg p-6 mt-4 text-center">
-                        <img class="w-24 h-24 rounded-full mx-auto mb-4 object-cover" src="https://placehold.co/96x96/007AFF/ffffff?text=U" alt="Profile Picture">
+                        <img class="w-24 h-24 rounded-full mx-auto mb-4 object-cover" id="profile-avatar" src="https://placehold.co/96x96/007AFF/ffffff?text=U" alt="Profile Picture">
                         <h2 class="text-2xl font-bold" id="profile-username">Загрузка...</h2>
                         <p class="text-gray-500 mb-4 text-sm break-all" id="profile-userid">ID: ...</p>
                         <p class="text-sm font-semibold mb-4" id="verification-status"></p>
@@ -321,43 +307,60 @@
             <div id="error-message" class="fixed inset-0 bg-black/80 text-white z-50 flex items-center justify-center p-4 hidden">
                 <div class="bg-red-700 p-6 rounded-lg text-center rounded-xl shadow-2xl">
                     <p class="font-bold text-xl mb-3">⚠️ Ошибка подключения к базе данных!</p>
-                    <p class="text-sm">Невозможно инициализировать Supabase. Приложение работает в ограниченном режиме (только UI).</p>
-                    <p class="text-xs mt-3 opacity-75">Чтобы получить полный функционал, замените фиктивные ключи в коде на реальные ключи Supabase.</p>
+                    <p class="text-sm">Невозможно инициализировать Firebase. Приложение работает в ограниченном режиме (только UI).</p>
+                    <p class="text-xs mt-3 opacity-75">Чтобы получить полный функционал, замените фиктивные ключи в коде на реальные ключи Firebase.</p>
                 </div>
             </div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        import { getAuth, signInWithCustomToken, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+        import { getFirestore, collection, doc, onSnapshot, query, where, addDoc, deleteDoc, setDoc, serverTimestamp, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+        // Make Firebase functions globally available
+        window.firebase = {
+            initializeApp, getAuth, signInWithCustomToken, signInAnonymously,
+            getFirestore, collection, doc, onSnapshot, query, where, addDoc, deleteDoc, setDoc, serverTimestamp, getDoc
+        };
+    </script>
     
     <script>
         
-        // --- БЛОК ДЛЯ НАСТРОЙКИ SUPABASE (ОБЯЗАТЕЛЬНО ЗАМЕНИТЕ КЛЮЧИ) ---
-        if (typeof window.__app_id === 'undefined') {
-            console.warn("Using mock Supabase configuration for local development. Full functionality requires real keys.");
+        // --- БЛОК ДЛЯ ЛОКАЛЬНОГО ЗАПУСКА (DEVELOPMENT FALLBACK) ---
+        // Если глобальные переменные не определены (т.е. запуск не в среде Canvas),
+        // мы создаем фиктивные переменные для предотвращения сбоя.
+        if (typeof window.__firebase_config === 'undefined') {
+            console.warn("Using mock Firebase configuration for local development. Full functionality requires real keys.");
             
-            // ВАШ РЕАЛЬНЫЙ ID приложения
-            window.__app_id = 'default-tma-id'; 
-            
-            // ⚠️ ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА РЕАЛЬНЫЕ ИЗ ВАШЕГО ПРОЕКТА SUPABASE
-            window.__supabase_url = 'https://ВАШ_SUPABASE_URL.supabase.co';
-            window.__supabase_anon_key = 'ВАШ_SUPABASE_ANON_KEY';
-            
-            window.__initial_user_id = 'mock-user-' + Math.random().toString(36).substring(2, 8); 
+            // ⚠️ ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА РЕАЛЬНЫЕ!
+            window.__app_id = 'ВАШ_РЕАЛЬНЫЙ_FIREBASE_APP_ID'; 
+            window.__firebase_config = JSON.stringify({
+                apiKey: "ВАШ_РЕАЛЬНЫЙ_API_KEY",
+                authDomain: "ВАШ_РЕАЛЬНЫЙ_AUTH_DOMAIN",
+                projectId: "ВАШ_РЕАЛЬНЫЙ_PROJECT_ID",
+            });
+            window.__initial_auth_token = null; 
         }
-        // --- КОНЕЦ БЛОКА НАСТРОЙКИ ---
+        // --- КОНЕЦ БЛОКА ЛОКАЛЬНОГО ЗАПУСКА ---
         
         // Global State and Constants
         const MOCK_VIDEO_ID = 'TMA_Vertical_001';
         const ADMIN_USER_ID = '8098423493'; 
-        const GENERIC_USERNAME = 'Пользователь '; 
+        
+        const MOCK_TG_USER_FIRST_NAME = window.Telegram.WebApp.initDataUnsafe.user.first_name || 'Пользователь';
+        const MOCK_TG_USER_LAST_NAME = window.Telegram.WebApp.initDataUnsafe.user.last_name || '';
+        const MOCK_TG_USERNAME = MOCK_TG_USER_FIRST_NAME + (MOCK_TG_USER_LAST_NAME ? ' ' + MOCK_TG_USER_LAST_NAME : '');
+
 
         let appState = {
-            userId: typeof window.__initial_user_id !== 'undefined' ? window.__initial_user_id : 'fallback-user-id',
-            appId: typeof window.__app_id !== 'undefined' ? window.__app_id : 'fallback-app-id',
-            username: GENERIC_USERNAME,
+            userId: null,
+            username: MOCK_TG_USERNAME, // Имя пользователя берется сразу из TG (заглушка)
             isVerified: false,
             isBanned: false,
             status: 'loading', 
-            isSupabaseReady: false, 
+            isFirebaseReady: false, 
             hasVideoDataLoaded: false, 
             hasLikesLoaded: false, 
             hasCommentsLoaded: false, 
@@ -372,22 +375,25 @@
             viewTitles: { 'home': 'Главная', 'post': 'Публикация', 'profile': 'Профиль', 'admin': 'Админ' }
         };
 
-        // Supabase Client Reference
-        let sb;
-        let realtimeChannel;
+        // Firebase References
+        let db, auth;
         
         // Объект для хранения ссылок на DOM-элементы
         let elements = {}; 
-        
+
         const viewOrder = ['home', 'post', 'profile', 'admin'];
         
-        // -----------------------------------------------------------
-        // 3. COMMON UTILITY FUNCTIONS (Вспомогательные функции)
-        // -----------------------------------------------------------
-        
+        // Path calculation uses a fallback for better error handling
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const path = ['artifacts', appId, 'public', 'data']; // Путь в Firestore для данных Telegram Mini App
+
+        /**
+         * --- VIEW CONTROL ---
+         */
+
         function collectDOMElements() {
             elements.splashScreen = document.getElementById('splash-screen');
-            elements.registrationView = document.getElementById('registration-view');
+            // elements.registrationView = document.getElementById('registration-view'); // УДАЛЕНО
             elements.mainAppContainer = document.getElementById('main-app-container');
             elements.contentSlider = document.getElementById('content-slider');
             elements.commentsView = document.getElementById('comments-view');
@@ -399,14 +405,12 @@
             elements.messageBox = document.getElementById('message-box');
             elements.errorMessage = document.getElementById('error-message');
 
-            // Registration elements
-            elements.usernameInput = document.getElementById('username-input');
-
             // Profile elements
             elements.profileUsername = document.getElementById('profile-username');
             elements.profileUserId = document.getElementById('profile-userid');
             elements.verificationStatus = document.getElementById('verification-status');
             elements.banStatus = document.getElementById('ban-status');
+            elements.profileAvatar = document.getElementById('profile-avatar');
             elements.adminUserIdDisplay = document.getElementById('admin-user-id-display');
             elements.targetUserId = document.getElementById('target-user-id');
 
@@ -422,6 +426,7 @@
             elements.commentList = document.getElementById('comment-list');
             elements.commentInput = document.getElementById('comment-input');
         }
+
 
         function switchView(viewId, updateHistory = true) {
             if (appState.isBanned && viewId !== 'profile') {
@@ -449,13 +454,13 @@
 
             // 4. Update history (for back button)
             if (updateHistory) {
-                 if (history.state && history.state.viewId === 'comments' && viewId !== 'comments') {
+                if (history.state && history.state.viewId === 'comments' && viewId !== 'comments') {
                     history.go(-1);
                 }
                 history.pushState({ viewId: viewId }, '', `#${viewId}`);
             }
         }
-        
+
         function updateHeader(title, showBack = false) {
             elements.headerTitle.textContent = title;
             elements.backButton.classList.toggle('hidden', !showBack);
@@ -463,31 +468,28 @@
         }
 
         function navigateBack() {
-             if (elements.commentsView.classList.contains('show-comments')) {
+            if (elements.commentsView.classList.contains('show-comments')) {
                 closeCommentsView();
             } else {
                 history.back();
             }
         }
 
-        let messageTimeout;
         function showMessage(message, bgColor) {
-            clearTimeout(messageTimeout);
-            
             elements.messageBox.textContent = message;
             const colorClass = bgColor.startsWith('tma-') ? `bg-${bgColor}` : bgColor;
             elements.messageBox.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white font-medium text-sm shadow-xl transition-all duration-300 z-50 ${colorClass}`;
             
             elements.messageBox.classList.remove('opacity-0', 'pointer-events-none');
             
-            messageTimeout = setTimeout(() => {
+            setTimeout(() => {
                 elements.messageBox.classList.add('opacity-0', 'pointer-events-none');
             }, 3000);
         }
 
-        // -----------------------------------------------------------
-        // 4. SUPABASE FLOW CONTROL AND AUTH
-        // -----------------------------------------------------------
+        /**
+         * --- INITIALIZATION FLOW CONTROL (REMOVED REGISTRATION STEP) ---
+         */
 
         function checkVideoDataReady() {
             if (!appState.hasVideoDataLoaded && appState.hasLikesLoaded && appState.hasCommentsLoaded) {
@@ -496,15 +498,9 @@
             }
         }
 
-        function hideSplashAndShowRegistration() {
-            elements.splashScreen.classList.add('hidden');
-            elements.registrationView.classList.remove('hidden');
-            updateHeader('Регистрация');
-        }
-
         function hideSplashAndShowMainApp() {
             elements.splashScreen.classList.add('hidden');
-            elements.registrationView.classList.add('hidden');
+            // elements.registrationView.classList.add('hidden'); // Удалено
             elements.mainAppContainer.classList.remove('hidden');
             switchView('home', false); 
             updateProfileUI(); 
@@ -513,7 +509,8 @@
 
         function startLimitedMode() {
             appState.status = 'limited';
-            appState.isSupabaseReady = false;
+            appState.isFirebaseReady = false;
+            appState.userId = 'mock-user-' + Math.random().toString(36).substring(2, 8); 
             
             elements.errorMessage.classList.remove('hidden');
             elements.splashScreen.classList.add('hidden');
@@ -524,9 +521,8 @@
             
             elements.videoLoadingOverlay.classList.add('hidden'); 
             appState.hasVideoDataLoaded = true;
-            showMessage('Приложение работает в ограниченном режиме (нет доступа к Supabase).', 'bg-red-500');
+            showMessage('Приложение работает в ограниченном режиме (нет доступа к Firebase).', 'bg-red-500');
 
-            // Disable interactive elements that require DB
             document.getElementById('comment-form').onsubmit = (e) => { 
                 e.preventDefault();
                 showMessage('Функция недоступна в ограниченном режиме.', 'tma-red'); 
@@ -537,233 +533,157 @@
 
 
         /**
-         * Initializes Supabase client and checks user registration status.
+         * --- FIREBASE AND AUTHENTICATION ---
          */
-        async function initSupabase() {
-            if (typeof window.supabase === 'undefined' || typeof window.__supabase_url === 'undefined' || typeof window.__supabase_anon_key === 'undefined') {
-                console.error("Supabase configuration missing. Starting limited mode.");
+
+        async function initFirebase() {
+            if (!window.firebase || typeof window.__firebase_config === 'undefined' || typeof window.__app_id === 'undefined') {
+                console.error("Firebase globals still missing after fallback. Starting limited mode.");
                 startLimitedMode();
                 return;
             }
             
-            if (window.__supabase_anon_key === 'ВАШ_SUPABASE_ANON_KEY') {
-                console.warn("Detected mock Supabase configuration. Starting in Limited Mode immediately.");
+            const firebaseConfig = JSON.parse(window.__firebase_config);
+            
+            if (firebaseConfig.apiKey === "ВАШ_РЕАЛЬНЫЙ_API_KEY") {
+                console.warn("Detected mock Firebase configuration. Starting in Limited Mode immediately.");
                 startLimitedMode();
                 return;
             }
 
+
             try {
-                // Initialize Supabase
-                sb = supabase.createClient(window.__supabase_url, window.__supabase_anon_key);
+                const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, getFirestore } = window.firebase;
                 
-                // ❗ КРИТИЧЕСКИ ВАЖНО: Устанавливаем App ID для RLS (Row Level Security)
-                // Если ваш RLS настроен правильно, эта функция RPC не обязательна,
-                // но она помогает при сложных конфигурациях. Здесь мы не используем RLS на уровне PostgreSQL.
-                // Вместо этого мы явно передаем app_id в insert/select/update.
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                appState.isFirebaseReady = true;
 
-                appState.isSupabaseReady = true;
+                let userCred;
+                if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+                    userCred = await signInWithCustomToken(auth, window.__initial_auth_token);
+                } else {
+                    userCred = await signInAnonymously(auth);
+                }
 
-                await checkRegistrationStatus();
+                appState.userId = userCred.user.uid;
+                
+                // 3. User is considered registered immediately. Fetch status.
+                appState.status = 'ready';
+                await fetchAndListenForUserStatus();
 
             } catch (error) {
-                console.error("Supabase Initialization Failed:", error);
+                console.error("Firebase Initialization Failed:", error);
                 startLimitedMode();
-            }
-        }
-
-        async function checkRegistrationStatus() {
-            if (!appState.isSupabaseReady) return;
-
-            try {
-                const { data, error } = await sb
-                    .from('users')
-                    .select('username, is_verified, is_banned')
-                    .eq('id', appState.userId)
-                    .eq('app_id', appState.appId) // <--- Fix for RLS
-                    .maybeSingle(); // Используем maybeSingle для обработки случая, когда нет записей
-
-                if (error && error.code !== 'PGRST116') { 
-                    throw error;
-                }
-
-                if (data && data.username && data.username !== GENERIC_USERNAME) {
-                    appState.username = data.username;
-                    appState.isVerified = data.is_verified || false;
-                    appState.isBanned = data.is_banned || false;
-                    
-                    appState.status = 'ready';
-                    setupRealtimeListeners();
-                    hideSplashAndShowMainApp();
-                } else {
-                    appState.status = 'registering';
-                    hideSplashAndShowRegistration();
-                }
-            } catch (e) {
-                console.error("Error reading registration status:", e);
-                appState.status = 'registering';
-                hideSplashAndShowRegistration();
             }
         }
         
-        async function registerUsername() {
-            if (!appState.isSupabaseReady) {
-                showMessage('Регистрация недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
+        /**
+         * Fetches and listens for the user's status (Ban/Verification).
+         * This replaces the username registration step.
+         */
+        async function fetchAndListenForUserStatus() {
+            if (!appState.isFirebaseReady) return;
 
-            const newUsername = elements.usernameInput.value.trim();
-            if (newUsername.length < 3) {
-                showMessage('Юзернейм должен быть не менее 3 символов.', 'tma-red');
-                return;
-            }
-
+            const { doc, getDoc, onSnapshot, setDoc, serverTimestamp } = window.firebase;
+            // Path: artifacts/{appId}/public/data/users/{userId}
+            const userRef = doc(db, ...path, 'users', appState.userId);
+            
             try {
-                // ⚠️ ДОБАВЛЕН app_id в upsert для обхода RLS ошибки
-                const { error } = await sb
-                    .from('users')
-                    .upsert({
-                        id: appState.userId,
-                        app_id: appState.appId, // <--- Fix for RLS
-                        username: newUsername,
-                        last_active: new Date().toISOString(),
-                        is_verified: false,
-                        is_banned: false,
-                    });
+                // 1. Ensure the user document exists (only for admin features: ban/verify)
+                await setDoc(userRef, {
+                    lastActive: serverTimestamp(),
+                }, { merge: true }); 
 
-                if (error) throw error;
-
-                appState.username = newUsername;
-                appState.status = 'ready';
-                showMessage(`Добро пожаловать, ${newUsername}!`, 'bg-green-500');
-
-                setupRealtimeListeners();
-                hideSplashAndShowMainApp();
+                // 2. Check current status
+                const docSnap = await getDoc(userRef);
+                if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    appState.isVerified = userData.isVerified || false;
+                    appState.isBanned = userData.isBanned || false;
+                }
                 
-            } catch (error) {
-                console.error("Registration failed:", error);
-                showMessage('Ошибка при сохранении юзернейма.', 'tma-red');
-            }
-        }
+                // 3. Set up the real-time listener for status changes
+                onSnapshot(userRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const userData = docSnap.data();
+                        appState.isVerified = userData.isVerified || false;
+                        appState.isBanned = userData.isBanned || false;
+                        
+                        updateProfileUI();
 
-
-        function setupUserAccountListener() {
-            if (!appState.isSupabaseReady) return;
-
-            sb.channel('user_status_channel')
-                .on('postgres_changes', { 
-                    event: 'UPDATE', 
-                    schema: 'public', 
-                    table: 'users', 
-                    filter: `app_id=eq.${appState.appId}&id=eq.${appState.userId}` 
-                }, (payload) => {
-                    const userData = payload.new;
-                    appState.isVerified = userData.is_verified || false;
-                    appState.isBanned = userData.is_banned || false;
-                    
-                    if (userData.username) {
-                         appState.username = userData.username;
-                    }
-                    
-                    updateProfileUI();
-
-                    if (appState.isBanned) {
-                        showMessage('Ваш аккаунт был забанен.', 'tma-red');
-                        if (appState.currentViewId !== 'profile') {
-                             switchView('profile');
+                        if (appState.isBanned) {
+                            showMessage('Ваш аккаунт был забанен.', 'tma-red');
+                            if (appState.currentViewId !== 'profile') {
+                                 switchView('profile');
+                            }
                         }
                     }
-                })
-                .subscribe();
+                });
+                
+                // 4. Proceed to main app
+                setupRealtimeListeners(); 
+                hideSplashAndShowMainApp();
+                
+            } catch (e) {
+                console.error("Error setting up user status listener:", e);
+                startLimitedMode();
+            }
         }
         
+        /**
+         * Sets up real-time listeners for comments and likes for the current mock video.
+         * Now this function only focuses on video data, as user status is handled above.
+         */
         function setupRealtimeListeners() {
-            if (!appState.isSupabaseReady) return;
+            if (!appState.isFirebaseReady) return;
 
-            setupUserAccountListener();
+            const { collection, onSnapshot, query } = window.firebase;
             
-            // Channel subscription and initial fetch combined
-            realtimeChannel = sb.channel('video_feed_realtime')
-                .on('postgres_changes', { 
-                    event: '*', 
-                    schema: 'public', 
-                    table: 'likes',
-                    filter: `app_id=eq.${appState.appId}&video_id=eq.${MOCK_VIDEO_ID}`
-                }, fetchLikesAndComments)
-                .on('postgres_changes', { 
-                    event: '*', 
-                    schema: 'public', 
-                    table: 'comments', 
-                    filter: `app_id=eq.${appState.appId}&video_id=eq.${MOCK_VIDEO_ID}`
-                }, fetchLikesAndComments)
-                .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        fetchLikesAndComments(); 
-                    }
+            // 1. Video Likes Listener
+            const likesCollectionRef = collection(db, ...path, 'videos', MOCK_VIDEO_ID, 'likes');
+            onSnapshot(likesCollectionRef, (snapshot) => {
+                appState.video.likeCount = snapshot.size;
+                appState.video.isLiked = snapshot.docs.some(doc => doc.id === appState.userId);
+                
+                appState.hasLikesLoaded = true;
+                checkVideoDataReady();
+                
+                updateVideoUI();
+            });
+
+            // 2. Video Comments Listener
+            const commentsCollectionRef = collection(db, ...path, 'videos', MOCK_VIDEO_ID, 'comments');
+            const commentsQuery = query(commentsCollectionRef); 
+            
+            onSnapshot(commentsQuery, (snapshot) => {
+                appState.video.comments = snapshot.docs.map(doc => ({ 
+                    id: doc.id, 
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp ? doc.data().timestamp.toDate() : new Date(0) 
+                })).sort((a, b) => b.timestamp - a.timestamp); 
+                
+                appState.video.comments.forEach(c => {
+                    c.timestampFormatted = c.timestamp.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
                 });
-            
+
+                elements.commentCount.textContent = appState.video.comments.length;
+                elements.totalCommentCount.textContent = appState.video.comments.length;
+                
+                appState.hasCommentsLoaded = true;
+                checkVideoDataReady();
+                
+                updateCommentsListUI();
+            });
+
             elements.videoIdDisplay.textContent = MOCK_VIDEO_ID;
         }
         
-        async function fetchLikesAndComments() {
-            if (!appState.isSupabaseReady) return;
-
-            // Fetch Likes Count
-            const { count: likeCount, error: likeError } = await sb
-                .from('likes')
-                .select('*', { count: 'exact', head: true })
-                .eq('app_id', appState.appId) // <--- Fix for RLS
-                .eq('video_id', MOCK_VIDEO_ID);
-                
-            if (likeError) console.error("Error fetching likes count:", likeError);
-            appState.video.likeCount = likeCount || 0;
-
-            // Check if current user liked
-            const { data: likedData, error: likedError } = await sb
-                .from('likes')
-                .select('user_id')
-                .eq('app_id', appState.appId) // <--- Fix for RLS
-                .eq('video_id', MOCK_VIDEO_ID)
-                .eq('user_id', appState.userId);
-            
-            if (likedError) console.error("Error checking user like:", likedError);
-            appState.video.isLiked = likedData && likedData.length > 0;
-            
-            appState.hasLikesLoaded = true;
-
-
-            // Fetch Comments
-            const { data: commentsData, error: commentsError } = await sb
-                .from('comments')
-                .select('*')
-                .eq('app_id', appState.appId) // <--- Fix for RLS
-                .eq('video_id', MOCK_VIDEO_ID)
-                .order('created_at', { ascending: false });
-            
-            if (commentsError) console.error("Error fetching comments:", commentsError);
-
-            if (commentsData) {
-                appState.video.comments = commentsData.map(c => ({
-                    id: c.id,
-                    userId: c.user_id,
-                    username: c.username,
-                    text: c.text,
-                    timestamp: new Date(c.created_at),
-                    timestampFormatted: new Date(c.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
-                }));
-            } else {
-                 appState.video.comments = [];
-            }
-            
-            appState.hasCommentsLoaded = true;
-            
-            updateVideoUI();
-            updateCommentsListUI();
-            checkVideoDataReady();
-        }
-        
-        // -----------------------------------------------------------
-        // 5. INTERACTION LOGIC (SUPABASE)
-        // -----------------------------------------------------------
+        /**
+         * --- INTERACTION LOGIC (FIRESTORE) ---
+         */
 
         function updateVideoUI() {
             elements.likeCount.textContent = appState.video.likeCount;
@@ -771,7 +691,7 @@
         }
 
         async function toggleLike() {
-            if (!appState.isSupabaseReady) {
+            if (!appState.isFirebaseReady) {
                 showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
                 return;
             }
@@ -780,28 +700,14 @@
                 return;
             }
 
+            const { doc, deleteDoc, setDoc } = window.firebase;
+            const likeRef = doc(db, ...path, 'videos', MOCK_VIDEO_ID, 'likes', appState.userId);
+
             try {
                 if (appState.video.isLiked) {
-                    const { error } = await sb
-                        .from('likes')
-                        .delete()
-                        .eq('user_id', appState.userId)
-                        .eq('video_id', MOCK_VIDEO_ID)
-                        .eq('app_id', appState.appId); // <--- Fix for RLS
-
-                    if (error) throw error;
+                    await deleteDoc(likeRef);
                 } else {
-                    // ⚠️ ДОБАВЛЕН app_id в insert
-                    const { error } = await sb
-                        .from('likes')
-                        .insert({ 
-                            user_id: appState.userId, 
-                            video_id: MOCK_VIDEO_ID, 
-                            app_id: appState.appId, // <--- Fix for RLS
-                            created_at: new Date().toISOString()
-                        });
-                        
-                    if (error) throw error;
+                    await setDoc(likeRef, { userId: appState.userId, timestamp: window.firebase.serverTimestamp() });
                 }
             } catch (e) {
                 console.error("Error toggling like:", e);
@@ -810,7 +716,7 @@
         }
         
         async function addComment() {
-            if (!appState.isSupabaseReady) {
+            if (!appState.isFirebaseReady) {
                 showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
                 return;
             }
@@ -822,21 +728,16 @@
             const commentText = elements.commentInput.value.trim();
             if (commentText.length === 0) return;
 
+            const { collection, addDoc, serverTimestamp } = window.firebase;
+            const commentsCollectionRef = collection(db, ...path, 'videos', MOCK_VIDEO_ID, 'comments');
+
             try {
-                // ⚠️ ДОБАВЛЕН app_id в insert
-                const { error } = await sb
-                    .from('comments')
-                    .insert({
-                        user_id: appState.userId,
-                        video_id: MOCK_VIDEO_ID,
-                        app_id: appState.appId, // <--- Fix for RLS
-                        username: appState.username,
-                        text: commentText,
-                        created_at: new Date().toISOString()
-                    });
-
-                if (error) throw error;
-
+                await addDoc(commentsCollectionRef, {
+                    userId: appState.userId,
+                    username: appState.username, // <-- Используем имя TG-пользователя
+                    text: commentText,
+                    timestamp: serverTimestamp()
+                });
                 elements.commentInput.value = ''; 
                 showMessage('Комментарий добавлен!', 'bg-green-500');
             } catch (e) {
@@ -860,7 +761,7 @@
                             <span class="text-xs text-gray-400">${comment.timestampFormatted}</span>
                         </div>
                         <p class="text-gray-700 mt-1 text-sm">${comment.text}</p>
-                        ${comment.userId === appState.userId && appState.isSupabaseReady ? 
+                        ${comment.userId === appState.userId && appState.isFirebaseReady ? 
                             `<button class="text-tma-red text-xs mt-1" onclick="deleteComment('${comment.id}')">Удалить</button>` : ''}
                     </div>
                 </div>
@@ -872,20 +773,15 @@
         }
 
         async function deleteComment(commentId) {
-            if (!appState.isSupabaseReady) {
+            if (!appState.isFirebaseReady) {
                 showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
                 return;
             }
-            
-            try {
-                const { error } = await sb
-                    .from('comments')
-                    .delete()
-                    .eq('id', commentId)
-                    .eq('user_id', appState.userId)
-                    .eq('app_id', appState.appId); // <--- Fix for RLS
+            const { doc, deleteDoc } = window.firebase;
+            const commentRef = doc(db, ...path, 'videos', MOCK_VIDEO_ID, 'comments', commentId);
 
-                if (error) throw error;
+            try {
+                await deleteDoc(commentRef);
                 showMessage('Комментарий удален.', 'bg-green-500');
             } catch (e) {
                 console.error("Error deleting comment:", e);
@@ -907,10 +803,15 @@
         }
 
         function updateProfileUI() {
-            elements.profileUsername.textContent = appState.username;
+            elements.profileUsername.textContent = appState.username; // Имя TG
             elements.profileUserId.textContent = `ID: ${appState.userId}`;
             elements.adminUserIdDisplay.textContent = appState.userId;
             
+            // Обновляем заглушку аватара
+            const firstLetter = appState.username.substring(0,1).toUpperCase();
+            elements.profileAvatar.src = `https://placehold.co/96x96/007AFF/ffffff?text=${firstLetter}`;
+            
+            // Verification status
             if (appState.isVerified) {
                 elements.verificationStatus.textContent = '✅ Верифицирован';
                 elements.verificationStatus.classList.remove('text-gray-500');
@@ -921,11 +822,12 @@
                 elements.verificationStatus.classList.add('text-gray-500');
             }
             
+            // Ban status
             elements.banStatus.classList.toggle('hidden', !appState.isBanned);
         }
 
         function updateAdminView() {
-            const isAdmin = appState.userId === ADMIN_USER_ID && appState.isSupabaseReady; 
+            const isAdmin = appState.userId === ADMIN_USER_ID && appState.isFirebaseReady; 
             elements.adminNavButton.classList.toggle('hidden', !isAdmin);
             
             if (isAdmin) {
@@ -938,38 +840,60 @@
             }
         }
         
-        async function updateAdminStatus(targetId, field, status, successMessage) {
-            if (!appState.isSupabaseReady || appState.userId !== ADMIN_USER_ID || !targetId) {
-                showMessage(appState.userId !== ADMIN_USER_ID ? 'Отказано в доступе.' : 'Введите ID пользователя.', 'tma-red');
-                return false;
+        async function setVerificationStatus(status) {
+            if (!appState.isFirebaseReady) {
+                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+                return;
+            }
+            if (appState.userId !== ADMIN_USER_ID) {
+                showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
+                return;
+            }
+            const targetId = elements.targetUserId.value.trim();
+            if (!targetId) {
+                showMessage('Введите ID пользователя.', 'tma-red');
+                return;
             }
             
+            const { doc, setDoc } = window.firebase;
+            const userRef = doc(db, ...path, 'users', targetId);
+            
             try {
-                // ⚠️ ДОБАВЛЕН app_id в update
-                const { error } = await sb
-                    .from('users')
-                    .update({ [field]: status })
-                    .eq('id', targetId)
-                    .eq('app_id', appState.appId); // <--- Fix for RLS
-
-                if (error) throw error;
-                showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${successMessage}`, 'bg-green-500');
-                return true;
+                await setDoc(userRef, { isVerified: status }, { merge: true });
+                const action = status ? 'Верифицирован' : 'Снята верификация';
+                showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
             } catch (e) {
-                console.error(`Error setting ${field} status:`, e);
+                console.error("Error setting verification status:", e);
                 showMessage('Ошибка при обновлении статуса.', 'tma-red');
-                return false;
             }
         }
-
-        function setVerificationStatus(status) {
-             const targetId = elements.targetUserId.value.trim();
-             updateAdminStatus(targetId, 'is_verified', status, status ? 'Верифицирован' : 'Снята верификация');
-        }
         
-        function setBanStatus(status) {
+        async function setBanStatus(status) {
+            if (!appState.isFirebaseReady) {
+                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+                return;
+            }
+            if (appState.userId !== ADMIN_USER_ID) {
+                showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
+                return;
+            }
             const targetId = elements.targetUserId.value.trim();
-            updateAdminStatus(targetId, 'is_banned', status, status ? 'Забанен' : 'Разбанен');
+            if (!targetId) {
+                showMessage('Введите ID пользователя.', 'tma-red');
+                return;
+            }
+            
+            const { doc, setDoc } = window.firebase;
+            const userRef = doc(db, ...path, 'users', targetId);
+            
+            try {
+                await setDoc(userRef, { isBanned: status }, { merge: true });
+                const action = status ? 'Забанен' : 'Разбанен';
+                showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
+            } catch (e) {
+                console.error("Error setting ban status:", e);
+                showMessage('Ошибка при обновлении статуса.', 'tma-red');
+            }
         }
         
         function publishVideo() {
@@ -984,7 +908,7 @@
             switchView('home');
         }
 
-        // Handle browser back/forward buttons 
+        // Handle browser back/forward buttons
         window.onpopstate = (event) => {
             const targetViewId = event.state && event.state.viewId ? event.state.viewId : 'home';
             
@@ -1004,15 +928,11 @@
         
         // --- APPLICATION ENTRY POINT ---
         window.onload = function () {
-            // 1. Collect elements after the DOM is fully loaded
-            collectDOMElements(); 
-            
-            // 2. Start Supabase initialization and auth check
-            initSupabase();
+            collectDOMElements();
+            initFirebase();
             
             // Make functions available globally for inline HTML event handlers
             window.switchView = switchView;
-            window.registerUsername = registerUsername;
             window.toggleLike = toggleLike;
             window.openCommentsView = openCommentsView;
             window.closeCommentsView = closeCommentsView;
