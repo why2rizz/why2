@@ -361,8 +361,8 @@
             window.__app_id = 'default-tma-id'; 
             
             // ⚠️ ЗАМЕНИТЕ ЭТИ ЗНАЧЕНИЯ НА РЕАЛЬНЫЕ ИЗ ВАШЕГО ПРОЕКТА SUPABASE
-            window.__supabase_url = 'https://ВАШ_SUPABASE_URL.supabase.co';
-            window.__supabase_anon_key = 'ВАШ_SUPABASE_ANON_KEY';
+            window.__supabase_url = 'https://qpdyhdvrkampgigddizx.supabase.co';
+            window.__supabase_anon_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwZHloZHZya2FtcGdpZ2RkaXp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4NDA4ODcsImV4cCI6MjA3NTQxNjg4N30.eBKi2hQ6pe-CN1_pqigrOwvWt6PAqeSJ0X7RdSIweS8';
             
             // В Supabase мы используем User ID, полученный от Telegram
             window.__initial_user_id = 'mock-user-' + Math.random().toString(36).substring(2, 8); 
@@ -488,10 +488,13 @@
 
             // 2. Real Initialization Attempt
             try {
-                // Supabase клиент доступен через глобальный объект window.supabase
-                sb = supabase.createClient(window.__supabase_url, window.__supabase_anon_key);
-                
-                appState.isSupabaseReady = true;
+// В initSupabase()
+sb = supabase.createClient(window.__supabase_url, window.__supabase_anon_key);
+
+// Устанавливаем App ID для использования в RLS-политиках
+await sb.rpc('set_app_id', { id: appState.appId }); 
+
+appState.isSupabaseReady = true;
 
                 // 3. Check if user is registered (relying on appState.userId being set from Telegram context)
                 await checkRegistrationStatus();
