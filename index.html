@@ -152,11 +152,16 @@
             <div id="content-slider">
                 
                 <div id="home-view" class="main-view bg-black">
-                    <div class="h-full w-full relative">
-                        <div id="video-loading-overlay" class="absolute inset-0 bg-gray-900/90 z-10 flex flex-col items-center justify-center text-white text-center p-4">
-                            <div class="spinner border-4 border-t-tma-primary border-solid rounded-full h-8 w-8 mb-4"></div>
-                            <p class="text-xl font-bold">Загрузка данных видео...</p>
-                        </div>
+    
+    <div id="video-loading-overlay" class="absolute inset-0 bg-gray-900/90 z-10 flex flex-col items-center justify-center text-white text-center p-4">
+        <div class="spinner border-4 border-t-tma-primary border-solid rounded-full h-8 w-8 mb-4"></div>
+        <p class="text-xl font-bold">Загрузка ленты видео...</p>
+    </div>
+    
+    <div id="video-feed-container" class="h-full w-full overflow-y-scroll snap-y snap-mandatory">
+        <p class="text-white text-center mt-20 p-4">Начальная загрузка...</p>
+    </div>
+</div>
                         
                         <div class="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-4">
                             <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
@@ -317,678 +322,828 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <script>
-        
-        // --- КОНФИГУРАЦИЯ SUPABASE ---
-        const SUPABASE_URL = 'https://qpdyhdvrkampgigddizx.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwZHloZHZya2FtcGdpZ2RkaXp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4NDA4ODcsImV4cCI6MjA3NTQxNjg4N30.eBKi2hQ6pe-CN1_pqigrOwvWt6PAqeSJ0X7RdSIweS8';
-        // ------------------------------
+<script>
+    
+    // --- КОНФИГУРАЦИЯ SUPABASE ---
+    const SUPABASE_URL = 'https://qpdyhdvrkampgigddizx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwZHloZHZya2FtcGdpZ2RkaXp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4NDA4ODcsImV4cCI6MjA3NTQxNjg4N30.eBKi2hQ6pe-CN1_pqigrOwvWt6PAqeSJ0X7RdSIweS8';
+    // ------------------------------
 
-        // Global State and Constants
-        const MOCK_VIDEO_ID = 'TMA_Vertical_001';
-        const ADMIN_USER_ID = '8098423493'; // Ваш ID для доступа к админке
+    // Global State and Constants
+    const ADMIN_USER_ID = '8098423493'; // Ваш ID для доступа к админке
 
-        // --- Безопасное получение имени пользователя из Telegram ---
-        let tgFirstName = 'Пользователь';
-        let tgLastName = 'TG';
-        let tgUsername = 'Пользователь TG';
-        let tgUserId = null;
+    // --- Безопасное получение имени пользователя из Telegram ---
+    let tgFirstName = 'Пользователь';
+    let tgLastName = 'TG';
+    let tgUsername = 'Пользователь TG';
+    let tgUserId = null;
 
-        // Проверяем, существует ли объект Telegram и его данные
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-            const user = window.Telegram.WebApp.initDataUnsafe.user;
-            tgFirstName = user.first_name || 'Пользователь';
-            tgLastName = user.last_name || '';
-            tgUsername = tgFirstName + (tgLastName ? ' ' + tgLastName : '');
-            tgUserId = user.id.toString(); 
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        tgFirstName = user.first_name || 'Пользователь';
+        tgLastName = user.last_name || '';
+        tgUsername = tgFirstName + (tgLastName ? ' ' + tgLastName : '');
+        tgUserId = user.id.toString(); 
+    }
+
+    const MOCK_TG_USERNAME = tgUsername;
+    const MOCK_ADMIN_USER_ID = tgUserId || ADMIN_USER_ID; 
+    // -----------------------------------------------------------
+
+
+    let appState = {
+        userId: null,
+        username: MOCK_TG_USERNAME, 
+        isVerified: false,
+        isBanned: false,
+        status: 'loading', 
+        isSupabaseReady: false, 
+        hasVideoDataLoaded: false, 
+        hasLikesLoaded: false, 
+        hasCommentsLoaded: false, 
+        currentViewId: 'home',
+        // НОВОЕ: Массив для хранения всех видео из Supabase
+        videos: [],
+        currentVideoIndex: 0, // Индекс активного видео (для ленты)
+        viewMap: { 'home': 0, 'post': 1, 'profile': 2, 'admin': 3 },
+        viewTitles: { 'home': 'Главная', 'post': 'Публикация', 'profile': 'Профиль', 'admin': 'Админ' }
+    };
+
+    // Supabase Client Reference
+    let supabase = null;
+    
+    // Объект для хранения ссылок на DOM-элементы
+    let elements = {}; 
+
+    const viewOrder = ['home', 'post', 'profile', 'admin'];
+    
+    /**
+     * --- VIEW CONTROL ---
+     */
+
+    function collectDOMElements() {
+        // ... (оставить без изменений) ...
+        elements.splashScreen = document.getElementById('splash-screen');
+        elements.mainAppContainer = document.getElementById('main-app-container');
+        elements.contentSlider = document.getElementById('content-slider');
+        elements.commentsView = document.getElementById('comments-view');
+        elements.headerTitle = document.getElementById('header-title');
+        elements.backButton = document.getElementById('back-button');
+        elements.searchButton = document.getElementById('search-button');
+        elements.adminNavButton = document.getElementById('admin-nav-button');
+        elements.navItems = document.querySelectorAll('.nav-item');
+        elements.messageBox = document.getElementById('message-box');
+        elements.errorMessage = document.getElementById('error-message');
+
+        // Profile elements
+        elements.profileUsername = document.getElementById('profile-username');
+        elements.profileUserId = document.getElementById('profile-userid');
+        elements.verificationStatus = document.getElementById('verification-status');
+        elements.banStatus = document.getElementById('ban-status');
+        elements.profileAvatar = document.getElementById('profile-avatar');
+        elements.adminUserIdDisplay = document.getElementById('admin-user-id-display');
+        elements.targetUserId = document.getElementById('target-user-id');
+
+        // Video elements (Теперь это контейнер ленты, а не элементы одного видео)
+        elements.videoFeedContainer = document.getElementById('video-feed-container'); 
+        elements.videoLoadingOverlay = document.getElementById('video-loading-overlay'); 
+
+        // Comments elements
+        elements.totalCommentCount = document.getElementById('total-comment-count');
+        elements.commentList = document.getElementById('comment-list');
+        elements.commentInput = document.getElementById('comment-input');
+    }
+
+
+    function switchView(viewId, updateHistory = true) {
+        // ... (оставить без изменений) ...
+        if (appState.isBanned && viewId !== 'profile') {
+            showMessage('Вы забанены и можете просматривать только свой профиль.', 'tma-red');
+            viewId = 'profile';
         }
 
-        // Используем реальные данные TG, если они доступны, иначе используем заглушки.
-        const MOCK_TG_USERNAME = tgUsername;
-        const MOCK_ADMIN_USER_ID = tgUserId || ADMIN_USER_ID; 
-        // -----------------------------------------------------------
+        const index = appState.viewMap[viewId];
+        if (index === undefined) return;
+        
+        appState.currentViewId = viewId;
 
+        // 1. Move the slider
+        elements.contentSlider.style.transform = `translateX(-${index * (100 / viewOrder.length)}%)`;
 
-        let appState = {
-            userId: null,
-            username: MOCK_TG_USERNAME, 
-            isVerified: false,
-            isBanned: false,
-            status: 'loading', 
-            isSupabaseReady: false, 
-            hasVideoDataLoaded: false, 
-            hasLikesLoaded: false, 
-            hasCommentsLoaded: false, 
-            currentViewId: 'home',
-            video: {
-                id: MOCK_VIDEO_ID,
-                isLiked: false,
-                likeCount: 0,
-                comments: []
-            },
-            viewMap: { 'home': 0, 'post': 1, 'profile': 2, 'admin': 3 },
-            viewTitles: { 'home': 'Главная', 'post': 'Публикация', 'profile': 'Профиль', 'admin': 'Админ' }
+        // 2. Update navigation bar active state
+        elements.navItems.forEach(item => {
+            const isCurrent = item.getAttribute('data-view-id') === viewId;
+            item.classList.toggle('text-tma-primary', isCurrent);
+            item.classList.toggle('text-gray-500', !isCurrent);
+        });
+
+        // 3. Update header title
+        updateHeader(appState.viewTitles[viewId]);
+
+        // 4. Update history (for back button)
+        if (updateHistory) {
+            if (history.state && history.state.viewId === 'comments' && viewId !== 'comments') {
+                history.go(-1);
+            }
+            history.pushState({ viewId: viewId }, '', `#${viewId}`);
+        }
+    }
+
+    function updateHeader(title, showBack = false) {
+        elements.headerTitle.textContent = title;
+        elements.backButton.classList.toggle('hidden', !showBack);
+        elements.searchButton.classList.toggle('hidden', showBack); 
+    }
+
+    // ... (navigateBack, showMessage - без изменений) ...
+    function navigateBack() {
+        if (elements.commentsView.classList.contains('show-comments')) {
+            closeCommentsView();
+        } else {
+            history.back();
+        }
+    }
+
+    function showMessage(message, bgColor) {
+        elements.messageBox.textContent = message;
+        const colorClass = bgColor.startsWith('tma-') ? `bg-${bgColor}` : bgColor;
+        elements.messageBox.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white font-medium text-sm shadow-xl transition-all duration-300 z-50 ${colorClass}`;
+        
+        elements.messageBox.classList.remove('opacity-0', 'pointer-events-none');
+        
+        setTimeout(() => {
+            elements.messageBox.classList.add('opacity-0', 'pointer-events-none');
+        }, 3000);
+    }
+    /**
+     * --- INITIALIZATION FLOW CONTROL ---
+     */
+
+    function checkVideoDataReady() {
+        // Теперь проверяем, загружены ли видео, а не фейковые лайки/комментарии
+        if (appState.videos.length > 0 && !appState.hasVideoDataLoaded) {
+             elements.videoLoadingOverlay.classList.add('hidden');
+             appState.hasVideoDataLoaded = true;
+             // Обновление UI происходит при fetchVideos
+        }
+    }
+
+    function hideSplashAndShowMainApp() {
+        elements.splashScreen.classList.add('hidden');
+        elements.mainAppContainer.classList.remove('hidden');
+        switchView('home', false); 
+        updateProfileUI(); 
+        updateAdminView();
+    }
+
+    function startLimitedMode() {
+        // ... (оставить без изменений) ...
+        appState.status = 'limited';
+        appState.isSupabaseReady = false;
+        appState.userId = tgUserId || 'mock-user-' + Math.random().toString(36).substring(2, 8); 
+        
+        elements.errorMessage.classList.remove('hidden');
+        elements.splashScreen.classList.add('hidden');
+        elements.mainAppContainer.classList.remove('hidden');
+        switchView('home', false);
+        updateProfileUI();
+        updateAdminView();
+        
+        elements.videoLoadingOverlay.classList.add('hidden'); 
+        appState.hasVideoDataLoaded = true;
+        showMessage('Приложение работает в ограниченном режиме (нет доступа к Supabase).', 'bg-red-500');
+        
+        // Отключение интерактивных функций
+        const limitedModeHandler = (e) => { 
+            if(e) e.preventDefault();
+            showMessage('Функция недоступна в ограниченном режиме.', 'tma-red'); 
+            return false; 
         };
+        document.getElementById('comment-form').onsubmit = limitedModeHandler;
+        // Назначаем обработчики для всех потенциальных элементов
+        document.querySelectorAll('.like-widget').forEach(el => el.onclick = limitedModeHandler);
+        document.querySelectorAll('.comment-widget').forEach(el => el.onclick = limitedModeHandler);
+    }
 
-        // Supabase Client Reference
-        let supabase = null;
-        
-        // Объект для хранения ссылок на DOM-элементы
-        let elements = {}; 
-
-        const viewOrder = ['home', 'post', 'profile', 'admin'];
-        
-        /**
-         * --- VIEW CONTROL ---
-         */
-
-        function collectDOMElements() {
-            elements.splashScreen = document.getElementById('splash-screen');
-            elements.mainAppContainer = document.getElementById('main-app-container');
-            elements.contentSlider = document.getElementById('content-slider');
-            elements.commentsView = document.getElementById('comments-view');
-            elements.headerTitle = document.getElementById('header-title');
-            elements.backButton = document.getElementById('back-button');
-            elements.searchButton = document.getElementById('search-button');
-            elements.adminNavButton = document.getElementById('admin-nav-button');
-            elements.navItems = document.querySelectorAll('.nav-item');
-            elements.messageBox = document.getElementById('message-box');
-            elements.errorMessage = document.getElementById('error-message');
-
-            // Profile elements
-            elements.profileUsername = document.getElementById('profile-username');
-            elements.profileUserId = document.getElementById('profile-userid');
-            elements.verificationStatus = document.getElementById('verification-status');
-            elements.banStatus = document.getElementById('ban-status');
-            elements.profileAvatar = document.getElementById('profile-avatar');
-            elements.adminUserIdDisplay = document.getElementById('admin-user-id-display');
-            elements.targetUserId = document.getElementById('target-user-id');
-
-            // Video elements
-            elements.videoLoadingOverlay = document.getElementById('video-loading-overlay'); 
-            elements.likeWidget = document.getElementById('like-widget');
-            elements.likeCount = document.getElementById('like-count');
-            elements.commentCount = document.getElementById('comment-count');
-            elements.videoIdDisplay = document.getElementById('video-id-display');
-
-            // Comments elements
-            elements.totalCommentCount = document.getElementById('total-comment-count');
-            elements.commentList = document.getElementById('comment-list');
-            elements.commentInput = document.getElementById('comment-input');
-        }
-
-
-        function switchView(viewId, updateHistory = true) {
-            if (appState.isBanned && viewId !== 'profile') {
-                showMessage('Вы забанены и можете просматривать только свой профиль.', 'tma-red');
-                viewId = 'profile';
-            }
-
-            const index = appState.viewMap[viewId];
-            if (index === undefined) return;
-            
-            appState.currentViewId = viewId;
-
-            // 1. Move the slider
-            elements.contentSlider.style.transform = `translateX(-${index * (100 / viewOrder.length)}%)`;
-
-            // 2. Update navigation bar active state
-            elements.navItems.forEach(item => {
-                const isCurrent = item.getAttribute('data-view-id') === viewId;
-                item.classList.toggle('text-tma-primary', isCurrent);
-                item.classList.toggle('text-gray-500', !isCurrent);
-            });
-
-            // 3. Update header title
-            updateHeader(appState.viewTitles[viewId]);
-
-            // 4. Update history (for back button)
-            if (updateHistory) {
-                if (history.state && history.state.viewId === 'comments' && viewId !== 'comments') {
-                    history.go(-1);
-                }
-                history.pushState({ viewId: viewId }, '', `#${viewId}`);
-            }
-        }
-
-        function updateHeader(title, showBack = false) {
-            elements.headerTitle.textContent = title;
-            elements.backButton.classList.toggle('hidden', !showBack);
-            elements.searchButton.classList.toggle('hidden', showBack); 
-        }
-
-        function navigateBack() {
-            if (elements.commentsView.classList.contains('show-comments')) {
-                closeCommentsView();
-            } else {
-                history.back();
-            }
-        }
-
-        function showMessage(message, bgColor) {
-            elements.messageBox.textContent = message;
-            const colorClass = bgColor.startsWith('tma-') ? `bg-${bgColor}` : bgColor;
-            elements.messageBox.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white font-medium text-sm shadow-xl transition-all duration-300 z-50 ${colorClass}`;
-            
-            elements.messageBox.classList.remove('opacity-0', 'pointer-events-none');
-            
-            setTimeout(() => {
-                elements.messageBox.classList.add('opacity-0', 'pointer-events-none');
-            }, 3000);
-        }
-
-        /**
-         * --- INITIALIZATION FLOW CONTROL ---
-         */
-
-        function checkVideoDataReady() {
-            if (!appState.hasVideoDataLoaded && appState.hasLikesLoaded && appState.hasCommentsLoaded) {
-                 elements.videoLoadingOverlay.classList.add('hidden');
-                 appState.hasVideoDataLoaded = true;
-            }
-        }
-
-        function hideSplashAndShowMainApp() {
-            elements.splashScreen.classList.add('hidden');
-            elements.mainAppContainer.classList.remove('hidden');
-            switchView('home', false); 
-            updateProfileUI(); 
-            updateAdminView();
-        }
-
-        function startLimitedMode() {
-            appState.status = 'limited';
-            appState.isSupabaseReady = false;
-            // Использование заглушки ID
-            appState.userId = tgUserId || 'mock-user-' + Math.random().toString(36).substring(2, 8); 
-            
-            elements.errorMessage.classList.remove('hidden');
-            elements.splashScreen.classList.add('hidden');
-            elements.mainAppContainer.classList.remove('hidden');
-            switchView('home', false);
-            updateProfileUI();
-            updateAdminView();
-            
-            elements.videoLoadingOverlay.classList.add('hidden'); 
-            appState.hasVideoDataLoaded = true;
-            showMessage('Приложение работает в ограниченном режиме (нет доступа к Supabase).', 'bg-red-500');
-
-            // Отключение интерактивных функций
-            document.getElementById('comment-form').onsubmit = (e) => { 
-                e.preventDefault();
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red'); 
-                return false; 
-            };
-            document.getElementById('like-widget').onclick = () => { showMessage('Функция недоступна в ограниченном режиме.', 'tma-red'); };
-        }
-
-
-        /**
-         * --- SUPABASE AND AUTHENTICATION ---
-         */
-        
-        async function initSupabase() {
-            if (!window.supabase) {
-                console.error("Supabase SDK not loaded. Starting limited mode.");
-                startLimitedMode();
-                return;
-            }
-            
-            try {
-                // 1. Инициализация клиента Supabase
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                appState.isSupabaseReady = true;
-
-                // 2. Аутентификация: вход как анонимный пользователь
-                let { data, error } = await supabase.auth.signInAnonymously();
-
-                if (error) throw error;
-
-                // 3. Сохранение ID пользователя (UUID)
-                appState.userId = data.user.id;
-                
-                // 4. Получение/создание записи пользователя и подписка на статус
-                await fetchAndListenForUserStatus();
-
-            } catch (error) {
-                console.error("Supabase Initialization/Auth Failed:", error);
-                startLimitedMode();
-            }
+    /**
+     * --- SUPABASE AND AUTHENTICATION ---
+     */
+    
+    async function initSupabase() {
+        // ... (оставить без изменений) ...
+        if (!window.supabase) {
+            console.error("Supabase SDK not loaded. Starting limited mode.");
+            startLimitedMode();
+            return;
         }
         
-        /**
-         * Fetches and listens for the user's status (Ban/Verification) from the 'users' table.
-         */
-        async function fetchAndListenForUserStatus() {
-            if (!appState.isSupabaseReady) return;
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            appState.isSupabaseReady = true;
 
-            try {
-                // 1. Убеждаемся, что запись пользователя существует (для админ-функций)
-                const { error: upsertError } = await supabase
-                    .from('users')
-                    .upsert({ user_id: appState.userId, username: appState.username, last_active: new Date().toISOString() }, { onConflict: 'user_id' });
+            let { data, error } = await supabase.auth.signInAnonymously();
 
-                if (upsertError) throw upsertError;
+            if (error) throw error;
 
-                // 2. Получаем текущий статус (на случай, если был бан/верификация)
-                const { data, error } = await supabase
-                    .from('users')
-                    .select('is_verified, is_banned')
-                    .eq('user_id', appState.userId)
-                    .single();
+            appState.userId = data.user.id;
+            
+            await fetchAndListenForUserStatus();
 
-                if (error && error.code !== 'PGRST116') throw error; // 'PGRST116' means 'no rows found'
+        } catch (error) {
+            console.error("Supabase Initialization/Auth Failed:", error);
+            startLimitedMode();
+        }
+    }
+    
+    // ... (fetchAndListenForUserStatus - без изменений) ...
+    async function fetchAndListenForUserStatus() {
+        if (!appState.isSupabaseReady) return;
 
-                if (data) {
-                    appState.isVerified = data.is_verified || false;
-                    appState.isBanned = data.is_banned || false;
-                }
-                
-                // 3. Настраиваем Realtime-подписку на изменения статуса
-                supabase.channel(`user_status:${appState.userId}`)
-                    .on('postgres_changes', 
-                        { event: 'UPDATE', schema: 'public', table: 'users', filter: `user_id=eq.${appState.userId}` },
-                        (payload) => {
-                            const newStatus = payload.new;
-                            appState.isVerified = newStatus.is_verified || false;
-                            appState.isBanned = newStatus.is_banned || false;
-                            
-                            updateProfileUI();
+        try {
+            // 1. Убеждаемся, что запись пользователя существует
+            const { error: upsertError } = await supabase
+                .from('users')
+                .upsert({ user_id: appState.userId, username: appState.username, last_active: new Date().toISOString() }, { onConflict: 'user_id' });
 
-                            if (appState.isBanned) {
-                                showMessage('Ваш аккаунт был забанен.', 'tma-red');
-                                if (appState.currentViewId !== 'profile') {
-                                     switchView('profile');
-                                }
+            if (upsertError) throw upsertError;
+
+            // 2. Получаем текущий статус
+            const { data, error } = await supabase
+                .from('users')
+                .select('is_verified, is_banned')
+                .eq('user_id', appState.userId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; 
+
+            if (data) {
+                appState.isVerified = data.is_verified || false;
+                appState.isBanned = data.is_banned || false;
+            }
+            
+            // 3. Настраиваем Realtime-подписку на изменения статуса
+            supabase.channel(`user_status:${appState.userId}`)
+                .on('postgres_changes', 
+                    { event: 'UPDATE', schema: 'public', table: 'users', filter: `user_id=eq.${appState.userId}` },
+                    (payload) => {
+                        const newStatus = payload.new;
+                        appState.isVerified = newStatus.is_verified || false;
+                        appState.isBanned = newStatus.is_banned || false;
+                        
+                        updateProfileUI();
+
+                        if (appState.isBanned) {
+                            showMessage('Ваш аккаунт был забанен.', 'tma-red');
+                            if (appState.currentViewId !== 'profile') {
+                                 switchView('profile');
                             }
                         }
-                    )
-                    .subscribe();
-                
-                // 4. Продолжаем загрузку основного приложения
-                setupRealtimeListeners(); 
-                hideSplashAndShowMainApp();
-                
-            } catch (e) {
-                console.error("Error setting up user status listener:", e);
-                startLimitedMode();
-            }
-        }
-        
-        /**
-         * Sets up real-time listeners for comments and likes using Supabase Realtime Channels.
-         */
-        function setupRealtimeListeners() {
-            if (!appState.isSupabaseReady) return;
-
-            // --- 1. Likes Listener ---
-            supabase.channel('video_likes')
-                .on('postgres_changes', 
-                    { event: '*', schema: 'public', table: 'video_likes', filter: `video_id=eq.${MOCK_VIDEO_ID}` },
-                    async () => {
-                        await fetchLikesAndStatus();
-                        appState.hasLikesLoaded = true;
-                        checkVideoDataReady();
-                        updateVideoUI();
                     }
                 )
                 .subscribe();
-
-            // --- 2. Comments Listener ---
-            supabase.channel('video_comments')
-                .on('postgres_changes', 
-                    { event: '*', schema: 'public', table: 'video_comments', filter: `video_id=eq.${MOCK_VIDEO_ID}` },
-                    async () => {
-                        await fetchComments();
-                        appState.hasCommentsLoaded = true;
-                        checkVideoDataReady();
-                        updateCommentsListUI();
-                    }
-                )
-                .subscribe();
-                
-            // Изначальная загрузка данных
-            fetchLikesAndStatus();
-            fetchComments();
-
-            elements.videoIdDisplay.textContent = MOCK_VIDEO_ID;
-        }
-        
-        // Вспомогательная функция для получения лайков и проверки статуса
-        async function fetchLikesAndStatus() {
-            const { data, error, count } = await supabase
-                .from('video_likes')
-                .select('user_id', { count: 'exact' })
-                .eq('video_id', MOCK_VIDEO_ID);
-
-            if (error) {
-                console.error("Error fetching likes:", error);
-                return;
-            }
             
-            appState.video.likeCount = count || 0;
-            appState.video.isLiked = data.some(like => like.user_id === appState.userId);
-            updateVideoUI();
+            // 4. Продолжаем загрузку основного приложения
+            setupRealtimeListeners(); 
+            hideSplashAndShowMainApp();
+            
+        } catch (e) {
+            console.error("Error setting up user status listener:", e);
+            startLimitedMode();
         }
+    }
+    
+    /**
+     * Sets up real-time listeners for all key tables.
+     */
+    function setupRealtimeListeners() {
+        if (!appState.isSupabaseReady) return;
 
-        // Вспомогательная функция для получения комментариев
-        async function fetchComments() {
-             const { data, error } = await supabase
-                .from('video_comments')
-                .select('id, user_id, username, text, created_at')
-                .eq('video_id', MOCK_VIDEO_ID)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error("Error fetching comments:", error);
-                return;
-            }
-
-            appState.video.comments = data.map(comment => ({
-                id: comment.id,
-                userId: comment.user_id,
-                username: comment.username,
-                text: comment.text,
-                timestamp: new Date(comment.created_at),
-                timestampFormatted: new Date(comment.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
-            }));
-
-            elements.commentCount.textContent = appState.video.comments.length;
-            elements.totalCommentCount.textContent = appState.video.comments.length;
-            updateCommentsListUI();
-        }
-
-
-        /**
-         * --- INTERACTION LOGIC (SUPABASE) ---
-         */
-
-        function updateVideoUI() {
-            elements.likeCount.textContent = appState.video.likeCount;
-            elements.likeWidget.classList.toggle('liked', appState.video.isLiked);
-        }
-
-        async function toggleLike() {
-            if (!appState.isSupabaseReady) {
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
-            if (appState.isBanned) {
-                showMessage('Вы не можете ставить лайки, так как ваш аккаунт забанен.', 'tma-red');
-                return;
-            }
-
-            try {
-                if (appState.video.isLiked) {
-                    // Удалить лайк
-                    const { error } = await supabase
-                        .from('video_likes')
-                        .delete()
-                        .eq('video_id', MOCK_VIDEO_ID)
-                        .eq('user_id', appState.userId);
-
-                    if (error) throw error;
-                } else {
-                    // Поставить лайк
-                    const { error } = await supabase
-                        .from('video_likes')
-                        .insert([
-                            { video_id: MOCK_VIDEO_ID, user_id: appState.userId }
-                        ]);
-                    
-                    if (error) throw error;
+        // --- 1. Videos Listener ---
+        // Если добавляется новое видео, или его метаданные меняются - перерисовываем ленту
+        supabase.channel('videos_feed')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'videos' },
+                async () => {
+                    await fetchVideos(); // Обновляем список видео
                 }
-            } catch (e) {
-                console.error("Error toggling like:", e);
-                showMessage('Ошибка при обновлении лайка. Проверьте права RLS.', 'tma-red');
+            )
+            .subscribe();
+
+        // --- 2. Global Likes Listener ---
+        // Слушаем лайки для ВСЕХ видео
+        supabase.channel('global_likes')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'video_likes' },
+                async () => {
+                    // Перезагружаем лайки и комментарии для текущего активного видео
+                    await fetchLikesAndCommentsForActiveVideo();
+                }
+            )
+            .subscribe();
+
+        // --- 3. Global Comments Listener ---
+        // Слушаем комментарии для ВСЕХ видео
+        supabase.channel('global_comments')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'video_comments' },
+                async () => {
+                    await fetchLikesAndCommentsForActiveVideo();
+                }
+            )
+            .subscribe();
+            
+        // Изначальная загрузка видео
+        fetchVideos();
+    }
+    
+    /**
+     * НОВАЯ ФУНКЦИЯ: Загружает все видео для ленты.
+     */
+    async function fetchVideos() {
+        elements.videoLoadingOverlay.classList.remove('hidden');
+
+        const { data, error } = await supabase
+            .from('videos')
+            .select('id, author_id, author_username, caption')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching videos:", error);
+            elements.videoFeedContainer.innerHTML = '<div class="text-white text-center mt-20 p-4">Ошибка загрузки видео.</div>';
+            return;
+        }
+
+        appState.videos = data.map(v => ({
+            id: v.id,
+            authorId: v.author_id,
+            authorUsername: v.author_username,
+            caption: v.caption,
+            isLiked: false, 
+            likeCount: 0, 
+            comments: []
+        }));
+        
+        if (appState.videos.length === 0) {
+            elements.videoFeedContainer.innerHTML = '<div class="text-white text-center mt-20 p-4">Пока нет ни одного видео. Создайте первое!</div>';
+        } else {
+            renderVideoFeed(appState.videos);
+            // Если мы загрузили видео, загружаем данные для первого
+            if (appState.hasVideoDataLoaded) {
+                 await fetchLikesAndCommentsForActiveVideo(); 
             }
         }
         
-        async function addComment() {
-            if (!appState.isSupabaseReady) {
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
-            if (appState.isBanned) {
-                showMessage('Вы не можете комментировать, так как ваш аккаунт забанен.', 'tma-red');
-                return;
-            }
+        checkVideoDataReady();
+    }
+    
+    /**
+     * НОВАЯ ФУНКЦИЯ: Генерирует HTML-код ленты.
+     */
+    function renderVideoFeed(videos) {
+        elements.videoFeedContainer.innerHTML = videos.map((video, index) => `
+            <div id="video-card-${video.id}" class="video-card h-full w-full relative snap-start">
+                
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-4 bg-gray-900">
+                    <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    <p class="font-light">Видео №${index + 1}</p>
+                    <p class="text-xl font-bold mt-2">@${video.authorUsername}</p>
+                </div>
 
-            const commentText = elements.commentInput.value.trim();
-            if (commentText.length === 0) return;
+                <div class="absolute bottom-4 left-4 right-20 text-white z-20">
+                    <p class="font-semibold text-lg">@${video.authorUsername}</p>
+                    <p class="text-sm mt-1">${video.caption}</p>
+                </div>
 
-            try {
+                <div class="absolute bottom-20 right-4 flex flex-col items-center space-y-6 text-white z-20">
+                    
+                    <div id="like-widget-${video.id}" class="like-widget flex flex-col items-center cursor-pointer select-none" 
+                        onclick="toggleLike(${video.id})">
+                        <svg class="like-icon w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <span id="like-count-${video.id}" class="text-sm font-semibold mt-1">0</span>
+                    </div>
+                    
+                    <div id="comment-widget-${video.id}" class="comment-widget flex flex-col items-center cursor-pointer select-none" 
+                        onclick="openCommentsView(${video.id})">
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+                        <span id="comment-count-${video.id}" class="text-sm font-semibold mt-1">0</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Устанавливаем обработчик прокрутки для определения активного видео
+        elements.videoFeedContainer.onscroll = debounce(handleVideoScroll, 100);
+
+        // При первой загрузке или обновлении ленты, загружаем данные для первого видео
+        appState.currentVideoIndex = 0;
+        fetchLikesAndCommentsForActiveVideo();
+    }
+
+    // Debounce function to limit scroll event frequency
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    /**
+     * НОВАЯ ФУНКЦИЯ: Обрабатывает прокрутку и определяет активное видео.
+     */
+    function handleVideoScroll() {
+        const container = elements.videoFeedContainer;
+        const scrollPosition = container.scrollTop;
+        const videoHeight = container.clientHeight;
+        
+        // Определяем индекс видео, которое занимает большую часть экрана
+        const newIndex = Math.round(scrollPosition / videoHeight);
+
+        if (newIndex !== appState.currentVideoIndex && newIndex >= 0 && newIndex < appState.videos.length) {
+            appState.currentVideoIndex = newIndex;
+            fetchLikesAndCommentsForActiveVideo();
+        }
+    }
+    
+    /**
+     * НОВАЯ ФУНКЦИЯ: Получает лайки и комментарии только для активного видео.
+     */
+    async function fetchLikesAndCommentsForActiveVideo() {
+        if (appState.videos.length === 0) return;
+
+        const video = appState.videos[appState.currentVideoIndex];
+        const videoId = video.id;
+
+        // 1. Получение лайков
+        const { data: likesData, count: likeCount, error: likesError } = await supabase
+            .from('video_likes')
+            .select('user_id', { count: 'exact' })
+            .eq('video_id', videoId);
+        
+        if (likesError) { console.error("Error fetching likes for video:", videoId, likesError); return; }
+
+        video.likeCount = likeCount || 0;
+        video.isLiked = likesData.some(like => like.user_id === appState.userId);
+
+        // 2. Получение комментариев
+        const { data: commentsData, error: commentsError } = await supabase
+            .from('video_comments')
+            .select('id, user_id, username, text, created_at')
+            .eq('video_id', videoId)
+            .order('created_at', { ascending: false });
+
+        if (commentsError) { console.error("Error fetching comments for video:", videoId, commentsError); return; }
+
+        video.comments = commentsData.map(comment => ({
+            id: comment.id,
+            userId: comment.user_id,
+            username: comment.username,
+            text: comment.text,
+            timestamp: new Date(comment.created_at),
+            timestampFormatted: new Date(comment.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+        }));
+
+        // 3. Обновление UI для активного видео
+        updateActiveVideoUI(video);
+        updateCommentsListUI(video); // Обновляем список комментариев, если он открыт
+    }
+
+    /**
+     * НОВАЯ ФУНКЦИЯ: Обновляет виджеты Лайков и Комментариев.
+     */
+    function updateActiveVideoUI(video) {
+        const likeCountEl = document.getElementById(`like-count-${video.id}`);
+        const likeWidgetEl = document.getElementById(`like-widget-${video.id}`);
+        const commentCountEl = document.getElementById(`comment-count-${video.id}`);
+        
+        if (likeCountEl) likeCountEl.textContent = video.likeCount;
+        if (commentCountEl) commentCountEl.textContent = video.comments.length;
+        
+        if (likeWidgetEl) {
+            likeWidgetEl.classList.toggle('liked', video.isLiked);
+        }
+    }
+
+
+    /**
+     * --- INTERACTION LOGIC (SUPABASE) ---
+     */
+
+    async function toggleLike(videoId) {
+        if (!appState.isSupabaseReady || appState.isBanned) {
+            showMessage('Действие недоступно.', 'tma-red');
+            return;
+        }
+
+        const video = appState.videos.find(v => v.id === videoId);
+        if (!video) return;
+
+        try {
+            if (video.isLiked) {
+                // Удалить лайк
                 const { error } = await supabase
-                    .from('video_comments')
+                    .from('video_likes')
+                    .delete()
+                    .eq('video_id', videoId)
+                    .eq('user_id', appState.userId);
+
+                if (error) throw error;
+            } else {
+                // Поставить лайк
+                const { error } = await supabase
+                    .from('video_likes')
                     .insert([
-                        {
-                            video_id: MOCK_VIDEO_ID,
-                            user_id: appState.userId,
-                            username: appState.username, // <-- Используем имя TG-пользователя
-                            text: commentText,
-                        }
+                        { video_id: videoId, user_id: appState.userId }
                     ]);
                 
                 if (error) throw error;
-                
-                elements.commentInput.value = ''; 
-                showMessage('Комментарий добавлен!', 'bg-green-500');
-            } catch (e) {
-                console.error("Error adding comment:", e);
-                showMessage('Ошибка при добавлении комментария. Проверьте права RLS.', 'tma-red');
             }
+        } catch (e) {
+            console.error("Error toggling like:", e);
+            showMessage('Ошибка при обновлении лайка. Проверьте права RLS.', 'tma-red');
         }
-        
-        function updateCommentsListUI() {
-            if (appState.video.comments.length === 0) {
-                elements.commentList.innerHTML = '<p class="text-center text-gray-500 mt-8">Будьте первым, кто прокомментирует!</p>';
-                return;
-            }
+    }
+    
+    async function addComment() {
+        if (!appState.isSupabaseReady || appState.isBanned) {
+            showMessage('Действие недоступно.', 'tma-red');
+            return;
+        }
 
-            elements.commentList.innerHTML = appState.video.comments.map(comment => `
-                <div class="flex space-x-3 bg-tma-card p-3 rounded-xl shadow-sm">
-                    <img class="w-8 h-8 rounded-full" src="https://placehold.co/32x32/179cde/ffffff?text=${comment.username.substring(0,1).toUpperCase()}" alt="Avatar">
-                    <div class="flex-1">
-                        <div class="flex justify-between items-start">
-                            <p class="text-sm font-semibold text-gray-800">${comment.username} ${comment.userId === appState.userId ? '<span class="text-tma-primary text-xs font-normal">(Вы)</span>' : ''}</p>
-                            <span class="text-xs text-gray-400">${comment.timestampFormatted}</span>
-                        </div>
-                        <p class="text-gray-700 mt-1 text-sm">${comment.text}</p>
-                        ${comment.userId === appState.userId && appState.isSupabaseReady ? 
-                            `<button class="text-tma-red text-xs mt-1" onclick="deleteComment('${comment.id}')">Удалить</button>` : ''}
-                    </div>
-                </div>
-            `).join('');
+        const commentText = elements.commentInput.value.trim();
+        const video = appState.videos[appState.currentVideoIndex];
+        if (commentText.length === 0 || !video) return;
+
+        try {
+            const { error } = await supabase
+                .from('video_comments')
+                .insert([
+                    {
+                        video_id: video.id,
+                        user_id: appState.userId,
+                        username: appState.username, 
+                        text: commentText,
+                    }
+                ]);
             
-            if (elements.commentsView.classList.contains('show-comments')) {
-                // Прокрутка вниз при обновлении
-                elements.commentList.scrollTop = elements.commentList.scrollHeight;
-            }
+            if (error) throw error;
+            
+            elements.commentInput.value = ''; 
+            showMessage('Комментарий добавлен!', 'bg-green-500');
+        } catch (e) {
+            console.error("Error adding comment:", e);
+            showMessage('Ошибка при добавлении комментария. Проверьте права RLS.', 'tma-red');
+        }
+    }
+    
+    function updateCommentsListUI(video = null) {
+        const activeVideo = video || appState.videos[appState.currentVideoIndex];
+        const comments = activeVideo ? activeVideo.comments : [];
+
+        elements.totalCommentCount.textContent = comments.length;
+        
+        if (comments.length === 0) {
+            elements.commentList.innerHTML = '<p class="text-center text-gray-500 mt-8">Будьте первым, кто прокомментирует!</p>';
+            return;
         }
 
-        async function deleteComment(commentId) {
-            if (!appState.isSupabaseReady) {
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
-
-            try {
-                const { error } = await supabase
-                    .from('video_comments')
-                    .delete()
-                    .eq('id', commentId)
-                    .eq('user_id', appState.userId); // Убедитесь, что удаляется только собственный комментарий
-
-                if (error) throw error;
-                
-                showMessage('Комментарий удален.', 'bg-green-500');
-            } catch (e) {
-                console.error("Error deleting comment:", e);
-                showMessage('Ошибка при удалении комментария. Проверьте права RLS.', 'tma-red');
-            }
-        }
-
-        function openCommentsView() {
-            elements.commentsView.classList.add('show-comments');
-            history.pushState({ viewId: 'comments' }, '', '#comments');
+        elements.commentList.innerHTML = comments.map(comment => `
+            <div class="flex space-x-3 bg-tma-card p-3 rounded-xl shadow-sm">
+                <img class="w-8 h-8 rounded-full" src="https://placehold.co/32x32/179cde/ffffff?text=${comment.username.substring(0,1).toUpperCase()}" alt="Avatar">
+                <div class="flex-1">
+                    <div class="flex justify-between items-start">
+                        <p class="text-sm font-semibold text-gray-800">${comment.username} ${comment.userId === appState.userId ? '<span class="text-tma-primary text-xs font-normal">(Вы)</span>' : ''}</p>
+                        <span class="text-xs text-gray-400">${comment.timestampFormatted}</span>
+                    </div>
+                    <p class="text-gray-700 mt-1 text-sm">${comment.text}</p>
+                    ${comment.userId === appState.userId && appState.isSupabaseReady ? 
+                        `<button class="text-tma-red text-xs mt-1" onclick="deleteComment('${comment.id}')">Удалить</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        if (elements.commentsView.classList.contains('show-comments')) {
             elements.commentList.scrollTop = elements.commentList.scrollHeight;
         }
+    }
 
-        function closeCommentsView() {
-            elements.commentsView.classList.remove('show-comments');
-            if (history.state && history.state.viewId === 'comments') {
-                history.back();
-            }
+    async function deleteComment(commentId) {
+        if (!appState.isSupabaseReady) {
+            showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+            return;
         }
 
-        function updateProfileUI() {
-            elements.profileUsername.textContent = appState.username; // Имя TG
-            elements.profileUserId.textContent = `ID: ${appState.userId}`;
-            elements.adminUserIdDisplay.textContent = appState.userId;
+        try {
+            const { error } = await supabase
+                .from('video_comments')
+                .delete()
+                .eq('id', commentId)
+                .eq('user_id', appState.userId); 
+
+            if (error) throw error;
             
-            // Обновляем заглушку аватара
-            const firstLetter = appState.username.substring(0,1).toUpperCase();
-            elements.profileAvatar.src = `https://placehold.co/96x96/007AFF/ffffff?text=${firstLetter}`;
-            
-            // Verification status
-            if (appState.isVerified) {
-                elements.verificationStatus.textContent = '✅ Верифицирован';
-                elements.verificationStatus.classList.remove('text-gray-500');
-                elements.verificationStatus.classList.add('text-tma-primary');
-            } else {
-                elements.verificationStatus.textContent = '⚪ Не верифицирован';
-                elements.verificationStatus.classList.remove('text-tma-primary');
-                elements.verificationStatus.classList.add('text-gray-500');
-            }
-            
-            // Ban status
-            elements.banStatus.classList.toggle('hidden', !appState.isBanned);
+            showMessage('Комментарий удален.', 'bg-green-500');
+        } catch (e) {
+            console.error("Error deleting comment:", e);
+            showMessage('Ошибка при удалении комментария. Проверьте права RLS.', 'tma-red');
+        }
+    }
+
+    function openCommentsView(videoId) {
+        // Устанавливаем текущее видео для корректного отображения комментариев
+        const index = appState.videos.findIndex(v => v.id === videoId);
+        if (index !== -1) {
+            appState.currentVideoIndex = index;
+            updateCommentsListUI(); 
         }
 
-        function updateAdminView() {
-            const isAdmin = appState.userId === MOCK_ADMIN_USER_ID && appState.isSupabaseReady; 
-            elements.adminNavButton.classList.toggle('hidden', !isAdmin);
-            
-            if (isAdmin) {
-                document.getElementById('admin-view').style.width = 'calc(100% / 4)'; 
-                document.getElementById('admin-view').classList.remove('hidden');
-                appState.viewTitles['admin'] = 'Админ';
-            } else {
-                document.getElementById('admin-view').classList.add('hidden');
-                delete appState.viewTitles['admin'];
-            }
+        elements.commentsView.classList.add('show-comments');
+        history.pushState({ viewId: 'comments' }, '', '#comments');
+        elements.commentList.scrollTop = elements.commentList.scrollHeight;
+    }
+
+    function closeCommentsView() {
+        elements.commentsView.classList.remove('show-comments');
+        if (history.state && history.state.viewId === 'comments') {
+            history.back();
+        }
+    }
+
+    // ... (updateProfileUI, updateAdminView, setVerificationStatus, setBanStatus - без изменений) ...
+    function updateProfileUI() {
+        elements.profileUsername.textContent = appState.username; // Имя TG
+        elements.profileUserId.textContent = `ID: ${appState.userId}`;
+        elements.adminUserIdDisplay.textContent = appState.userId;
+        
+        const firstLetter = appState.username.substring(0,1).toUpperCase();
+        elements.profileAvatar.src = `https://placehold.co/96x96/007AFF/ffffff?text=${firstLetter}`;
+        
+        if (appState.isVerified) {
+            elements.verificationStatus.textContent = '✅ Верифицирован';
+            elements.verificationStatus.classList.remove('text-gray-500');
+            elements.verificationStatus.classList.add('text-tma-primary');
+        } else {
+            elements.verificationStatus.textContent = '⚪ Не верифицирован';
+            elements.verificationStatus.classList.remove('text-tma-primary');
+            elements.verificationStatus.classList.add('text-gray-500');
         }
         
-        async function setVerificationStatus(status) {
-            if (!appState.isSupabaseReady) {
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
-            if (appState.userId !== MOCK_ADMIN_USER_ID) {
-                showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
-                return;
-            }
-            const targetId = elements.targetUserId.value.trim();
-            if (!targetId) {
-                showMessage('Введите ID пользователя.', 'tma-red');
-                return;
-            }
-            
-            try {
-                const { error } = await supabase
-                    .from('users')
-                    .update({ is_verified: status })
-                    .eq('user_id', targetId);
+        elements.banStatus.classList.toggle('hidden', !appState.isBanned);
+    }
 
-                if (error) throw error;
-                
-                const action = status ? 'Верифицирован' : 'Снята верификация';
-                showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
-            } catch (e) {
-                console.error("Error setting verification status:", e);
-                showMessage('Ошибка при обновлении статуса. Проверьте права RLS.', 'tma-red');
-            }
+    function updateAdminView() {
+        const isAdmin = appState.userId === MOCK_ADMIN_USER_ID && appState.isSupabaseReady; 
+        elements.adminNavButton.classList.toggle('hidden', !isAdmin);
+        
+        if (isAdmin) {
+            document.getElementById('admin-view').style.width = 'calc(100% / 4)'; 
+            document.getElementById('admin-view').classList.remove('hidden');
+            appState.viewTitles['admin'] = 'Админ';
+        } else {
+            document.getElementById('admin-view').classList.add('hidden');
+            delete appState.viewTitles['admin'];
+        }
+    }
+    
+    async function setVerificationStatus(status) {
+        if (!appState.isSupabaseReady) {
+            showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+            return;
+        }
+        if (appState.userId !== MOCK_ADMIN_USER_ID) {
+            showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
+            return;
+        }
+        const targetId = elements.targetUserId.value.trim();
+        if (!targetId) {
+            showMessage('Введите ID пользователя.', 'tma-red');
+            return;
         }
         
-        async function setBanStatus(status) {
-            if (!appState.isSupabaseReady) {
-                showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
-                return;
-            }
-            if (appState.userId !== MOCK_ADMIN_USER_ID) {
-                showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
-                return;
-            }
-            const targetId = elements.targetUserId.value.trim();
-            if (!targetId) {
-                showMessage('Введите ID пользователя.', 'tma-red');
-                return;
-            }
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ is_verified: status })
+                .eq('user_id', targetId);
+
+            if (error) throw error;
             
-            try {
-                const { error } = await supabase
-                    .from('users')
-                    .update({ is_banned: status })
-                    .eq('user_id', targetId);
-                
-                if (error) throw error;
-                
-                const action = status ? 'Забанен' : 'Разбанен';
-                showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
-            } catch (e) {
-                console.error("Error setting ban status:", e);
-                showMessage('Ошибка при обновлении статуса. Проверьте права RLS.', 'tma-red');
-            }
+            const action = status ? 'Верифицирован' : 'Снята верификация';
+            showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
+        } catch (e) {
+            console.error("Error setting verification status:", e);
+            showMessage('Ошибка при обновлении статуса. Проверьте права RLS.', 'tma-red');
+        }
+    }
+    
+    async function setBanStatus(status) {
+        if (!appState.isSupabaseReady) {
+            showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+            return;
+        }
+        if (appState.userId !== MOCK_ADMIN_USER_ID) {
+            showMessage('Отказано в доступе. Вы не являетесь администратором.', 'tma-red');
+            return;
+        }
+        const targetId = elements.targetUserId.value.trim();
+        if (!targetId) {
+            showMessage('Введите ID пользователя.', 'tma-red');
+            return;
         }
         
-        function publishVideo() {
-            const caption = document.getElementById('caption-input').value.trim();
-            if (caption.length < 5) {
-                 showMessage('Описание должно быть длиннее 5 символов.', 'tma-red');
-                 return;
-            }
+        try {
+            const { error } = await supabase
+                .from('users')
+                .update({ is_banned: status })
+                .eq('user_id', targetId);
+            
+            if (error) throw error;
+            
+            const action = status ? 'Забанен' : 'Разбанен';
+            showMessage(`Пользователь ${targetId.substring(0, 8)}...: ${action}`, 'bg-green-500');
+        } catch (e) {
+            console.error("Error setting ban status:", e);
+            showMessage('Ошибка при обновлении статуса. Проверьте права RLS.', 'tma-red');
+        }
+    }
+    
+    /**
+     * НОВАЯ ЛОГИКА: Добавление видео в таблицу Supabase
+     */
+    async function publishVideo() {
+        if (!appState.isSupabaseReady) {
+            showMessage('Функция недоступна в ограниченном режиме.', 'tma-red');
+            return;
+        }
+        if (appState.isBanned) {
+            showMessage('Вы не можете публиковать видео, так как ваш аккаунт забанен.', 'tma-red');
+            return;
+        }
 
-            showMessage(`Видео с описанием: "${caption.substring(0, 20)}..." опубликовано (модель).`, 'bg-tma-primary');
+        const caption = document.getElementById('caption-input').value.trim();
+        if (caption.length < 5) {
+             showMessage('Описание должно быть длиннее 5 символов.', 'tma-red');
+             return;
+        }
+        
+        try {
+            const { error } = await supabase
+                .from('videos')
+                .insert([
+                    {
+                        author_id: appState.userId,
+                        author_username: appState.username,
+                        caption: caption,
+                        // video_url использует значение по умолчанию в БД
+                    }
+                ]);
+
+            if (error) throw error;
+            
+            showMessage(`Видео опубликовано!`, 'bg-tma-primary');
             document.getElementById('caption-input').value = '';
             switchView('home');
+        } catch (e) {
+            console.error("Error publishing video:", e);
+            showMessage('Ошибка при публикации видео. Проверьте права RLS.', 'tma-red');
+        }
+    }
+    
+    // ... (onpopstate - без изменений) ...
+    window.onpopstate = (event) => {
+        const targetViewId = event.state && event.state.viewId ? event.state.viewId : 'home';
+        
+        if (targetViewId === 'comments') {
+            elements.commentsView.classList.add('show-comments');
+        } else if (appState.currentViewId === 'comments') {
+            elements.commentsView.classList.remove('show-comments');
         }
 
-        // Handle browser back/forward buttons
-        window.onpopstate = (event) => {
-            const targetViewId = event.state && event.state.viewId ? event.state.viewId : 'home';
-            
-            if (targetViewId === 'comments') {
-                elements.commentsView.classList.add('show-comments');
-            } else if (appState.currentViewId === 'comments') {
-                elements.commentsView.classList.remove('show-comments');
-            }
-
-            if (targetViewId !== 'comments') {
-                 if (appState.currentViewId !== targetViewId) {
-                    switchView(targetViewId, false);
-                 }
-            }
-        };
-
+        if (targetViewId !== 'comments') {
+             if (appState.currentViewId !== targetViewId) {
+                switchView(targetViewId, false);
+             }
+        }
+    };
+    
+    // --- APPLICATION ENTRY POINT ---
+    window.onload = function () {
+        collectDOMElements();
+        initSupabase(); 
         
-        // --- APPLICATION ENTRY POINT ---
-        window.onload = function () {
-            collectDOMElements();
-            initSupabase(); // Запускаем инициализацию Supabase
-            
-            // Make functions available globally for inline HTML event handlers
-            window.switchView = switchView;
-            window.toggleLike = toggleLike;
-            window.openCommentsView = openCommentsView;
-            window.closeCommentsView = closeCommentsView;
-            window.addComment = addComment;
-            window.deleteComment = deleteComment;
-            window.navigateBack = navigateBack;
-            window.setVerificationStatus = setVerificationStatus;
-            window.setBanStatus = setBanStatus;
-            window.publishVideo = publishVideo;
-            window.showMessage = showMessage;
-        };
-    </script>
+        window.switchView = switchView;
+        window.toggleLike = toggleLike;
+        window.openCommentsView = openCommentsView;
+        window.closeCommentsView = closeCommentsView;
+        window.addComment = addComment;
+        window.deleteComment = deleteComment;
+        window.navigateBack = navigateBack;
+        window.setVerificationStatus = setVerificationStatus;
+        window.setBanStatus = setBanStatus;
+        window.publishVideo = publishVideo;
+        window.showMessage = showMessage;
+    };
+</script>
 </body>
 </html>
+
